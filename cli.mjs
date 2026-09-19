@@ -28,7 +28,7 @@ function detectHome() {
     '/volume1/@appdata/DeepSeekHarness-NAS/0.1.6-alpha.1/.dsh',
     `${process.env.HOME || ''}/.dsh`,
   ];
-  for (const c of cands) if (c && existsSync(c)) return c;
+  for (const cand of cands) if (cand && existsSync(cand)) return cand;
   return null;
 }
 

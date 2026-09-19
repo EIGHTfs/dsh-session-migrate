@@ -41,36 +41,49 @@ const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  */
 function findDshRoot() {
   if (process.env.DSH_ROOT) return process.env.DSH_ROOT;
-  const isRoot = (d) => Boolean(d) && existsSync(join(d, 'package.json')) && existsSync(join(d, 'node_modules'));
+  const isRoot = (dir) => Boolean(dir) && existsSync(join(dir, 'package.json')) && existsSync(join(dir, 'node_modules'));
 
-  /**
-   * 把 appdata 侧路径映射到 appstore 侧的安装根。
-   *
-   * 用分段重组而非正则：正则里 .*? 与 [^/]+ 相邻时会回溯错位，把包名段吞掉。
-   *
-   * @param {string} p - 形如 <前缀>/@appdata/<包名>/<版本>/… 的路径。
-   * @returns {string} 安装根候选，不适用时返回空串。
-   */
-  const appstoreTwin = (p) => {
-    if (!p) return '';
-    const parts = p.split('/').filter(Boolean);
-    const at = parts.indexOf('@appdata');
-    if (at < 0 || parts.length <= at + 1) return '';
-    const head = parts.slice(0, at).join('/');
-    return `${head ? '/' + head : ''}/@appstore/${parts[at + 1]}/`;
-  };
-
+  // ① 环境变量 DSH_HOME 及其上级（实例根、安装根）
   const home = process.env.DSH_HOME;
   if (home) {
     for (const candidate of [home, resolve(home, '..'), resolve(home, '..', '..')]) {
       if (isRoot(candidate)) return candidate;
     }
   }
-  // 项目自身就在 appdata 侧，据此找 appstore 孪生目录（免环境变量）
+  // ② 项目自身就在 appdata 侧，据此找 appstore 孪生目录（免环境变量）
   for (const twin of [appstoreTwin(home), appstoreTwin(PROJECT_ROOT)]) {
     if (twin && isRoot(twin)) return twin;
   }
-  let cur = PROJECT_ROOT;
+  // ③ 从项目根向上最多 8 级
+  return findRootUpward(PROJECT_ROOT, isRoot);
+}
+
+/**
+ * 把 appdata 侧路径映射到 appstore 侧的安装根。
+ *
+ * 用分段重组而非正则：正则里 .*? 与 [^/]+ 相邻时会回溯错位，把包名段吞掉。
+ *
+ * @param {string} p - 形如 <前缀>/@appdata/<包名>/<版本>/… 的路径。
+ * @returns {string} 安装根候选，不适用时返回空串。
+ */
+function appstoreTwin(p) {
+  if (!p) return '';
+  const parts = p.split('/').filter(Boolean);
+  const at = parts.indexOf('@appdata');
+  if (at < 0 || parts.length <= at + 1) return '';
+  const head = parts.slice(0, at).join('/');
+  return `${head ? '/' + head : ''}/@appstore/${parts[at + 1]}/`;
+}
+
+/**
+ * 从起点向上逐级找安装根（最多 8 级）。
+ *
+ * @param {string} start - 起点路径。
+ * @param {Function} isRoot - 安装根判据。
+ * @returns {string} 找到的安装根，找不到返回空串。
+ */
+function findRootUpward(start, isRoot) {
+  let cur = start;
   for (let i = 0; i < 8; i++) {
     const up = resolve(cur, '..');
     if (up === cur) break;
@@ -132,9 +145,9 @@ const harness = `
 window.__ERRORS__ = [];
 function __err(kind, msg) {
   window.__ERRORS__.push(kind + ': ' + msg);
-  var d = document.getElementById('__err');
-  if (!d) { d = document.createElement('pre'); d.id = '__err'; d.style.cssText = 'color:#f87171;white-space:pre-wrap;font-size:12px;border:1px solid #f87171;padding:8px;margin:0 0 12px'; document.body.insertBefore(d, document.body.firstChild); }
-  d.textContent += kind + ': ' + msg + String.fromCharCode(10);
+  var errBox = document.getElementById('__err');
+  if (!errBox) { errBox = document.createElement('pre'); errBox.id = '__err'; errBox.style.cssText = 'color:#f87171;white-space:pre-wrap;font-size:12px;border:1px solid #f87171;padding:8px;margin:0 0 12px'; document.body.insertBefore(errBox, document.body.firstChild); }
+  errBox.textContent += kind + ': ' + msg + String.fromCharCode(10);
 }
 window.addEventListener('error', function (e) { __err('error', e.message); });
 window.addEventListener('unhandledrejection', function (e) { __err('reject', String((e.reason && e.reason.stack) || e.reason)); });
@@ -179,7 +192,7 @@ window.__ctxMock = {
 // 响应形状必须与真实 Response 对齐：client.js 的 apiFetch 走 res.text() + JSON.parse
 // （不是 res.json()）；只给 json() 时页面停在「加载失败: res.text is not a function」。
 window.fetch = function (url, init) {
-  var u = String(url);
+  var urlStr = String(url);
   var json = function (body) {
     var text = JSON.stringify(body);
     return Promise.resolve({
@@ -189,10 +202,10 @@ window.fetch = function (url, init) {
       json: function () { return Promise.resolve(body); },
     });
   };
-  if (u.indexOf('/api/session-migrate/i18n') >= 0) {
+  if (urlStr.indexOf('/api/session-migrate/i18n') >= 0) {
     return json({ ok: true, zh: ${zhDict}, en: ${enDict} });
   }
-  if (u.indexOf('/api/session-migrate/convert') >= 0) {
+  if (urlStr.indexOf('/api/session-migrate/convert') >= 0) {
     var body = {};
     try { body = JSON.parse((init && init.body) || '{}'); } catch (e) { body = {}; }
     var ids = body.ids || [];
@@ -206,7 +219,7 @@ window.fetch = function (url, init) {
       }),
     });
   }
-  if (u.indexOf('/api/session-migrate/import') >= 0) {
+  if (urlStr.indexOf('/api/session-migrate/import') >= 0) {
     window.__IMPORTED__ = true;
     return json({
       ok: true,
@@ -214,7 +227,7 @@ window.fetch = function (url, init) {
       failed: [{ name: 'not-a-session.txt', err: '扩展名不受支持' }],
     });
   }
-  if (u.indexOf('/api/session-migrate/state') >= 0) return json(window.__FAKE__);
+  if (urlStr.indexOf('/api/session-migrate/state') >= 0) return json(window.__FAKE__);
   return json({ ok: true });
 };
 `;
@@ -288,10 +301,13 @@ const out = join(PROJECT_ROOT, 'assets', 'preview.html');
 writeFileSync(out, html);
 console.log(`生成 ${out}（${(html.length / 1048576).toFixed(2)} MB）`);
 
+/** --serve 的默认端口。 */
+const SERVE_DEFAULT_PORT = 8099;
+
 /* ───────────────────────── --serve：局域网托管 ───────────────────────── */
 
 if (process.argv.includes('--serve')) {
-  const want = Number(process.env.PORT || 8099);
+  const want = Number(process.env.PORT || SERVE_DEFAULT_PORT);
   const { port } = await serve(PROJECT_ROOT, want);
   console.log('\n局域网可访问：');
   console.log(`  本机     http://127.0.0.1:${port}/preview.html`);

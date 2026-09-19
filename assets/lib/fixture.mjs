@@ -17,21 +17,33 @@
  */
 const LEGACY_DIR = '<DSH 数据目录>/session.old';
 const WS_ROOT = '<DSH 数据目录>/工作区';
+const WS_SESSION_MIGRATE = `${WS_ROOT}/dsh-session-migrate`;
+const WS_SKILL_SCOREBOARD = `${WS_ROOT}/dsh-skill-scoreboard`;
+const OLD_INSTANCE_WS = '/volume1/@appdata/…/0.1.5-alpha.1/工作区';
 
 const WORKSPACES = [
   { cwd: WS_ROOT, name: '工作区', source: 'root', exists: true },
-  { cwd: `${WS_ROOT}/dsh-session-migrate`, name: 'dsh-session-migrate', source: 'root', exists: true },
-  { cwd: `${WS_ROOT}/dsh-skill-scoreboard`, name: 'dsh-skill-scoreboard', source: 'root', exists: true },
-  { cwd: '/volume1/@appdata/…/0.1.5-alpha.1/工作区', name: '旧版本工作区', source: 'legacy', exists: false },
+  { cwd: WS_SESSION_MIGRATE, name: 'dsh-session-migrate', source: 'root', exists: true },
+  { cwd: WS_SKILL_SCOREBOARD, name: 'dsh-skill-scoreboard', source: 'root', exists: true },
+  { cwd: OLD_INSTANCE_WS, name: '旧版本工作区', source: 'legacy', exists: false },
 ];
 
+// ── 假数据：各会话的磁盘大小（字节），刻意造出不同量级，便于预览列表排序/列宽 ──
+const SIZE_HUGE = 38700099;      // ~38MB：大会话
+const SIZE_BIG = 12204032;       // ~12MB
+const SIZE_MEDIUM = 8842112;     // ~8.4MB
+const SIZE_SMALL = 5509121;      // ~5.3MB
+const SIZE_2MB = 2097152;        // 恰好 2MB
+const SIZE_HALF_MB = 512000;     // 512KB
+const SIZE_TINY = 40960;         // 40KB：broken 示例
+
 const SESSIONS = [
-  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e01', 0, [], 38700099, `${WS_ROOT}/dsh-session-migrate`],
-  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e02', 0, [1, 2], 12204032, `${WS_ROOT}/dsh-session-migrate`],
-  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e03', 0, [1, 2, 3], 8842112, `${WS_ROOT}/dsh-skill-scoreboard`],
-  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e04', 3, [3], 5509121, `${WS_ROOT}/dsh-skill-scoreboard`],
-  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e05', 0, [], 2097152, '/volume1/@appdata/…/0.1.5-alpha.1/工作区'],
-  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e06', 0, [], 512000, null],
+  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e01', 0, [], SIZE_HUGE, WS_SESSION_MIGRATE],
+  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e02', 0, [1, 2], SIZE_BIG, WS_SESSION_MIGRATE],
+  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e03', 0, [1, 2, 3], SIZE_MEDIUM, WS_SKILL_SCOREBOARD],
+  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e04', 3, [3], SIZE_SMALL, WS_SKILL_SCOREBOARD],
+  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e05', 0, [], SIZE_2MB, OLD_INSTANCE_WS],
+  ['72f9c1d0-4f2b-4a81-9d3e-0a1b2c3d4e06', 0, [], SIZE_HALF_MB, null],
 ];
 
 /** 迁移边（与真实 target.migrations 同形）。 */
@@ -77,7 +89,7 @@ const FAKE = {
     id: 'broken-legacy',
     cwd: WS_ROOT,
     version: null,
-    size: 40960,
+    size: SIZE_TINY,
     readable: false,
     frameCount: 0,
     headerOk: false,
