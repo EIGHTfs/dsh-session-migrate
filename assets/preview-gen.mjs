@@ -274,13 +274,20 @@ try {
 }
 `;
 
+/** 预览页正文行高（CSS font 简写中的 /1.5）。 */
+const PREVIEW_LINE_HEIGHT = 1.5
+/** 预览页正文字号/行高（CSS font 简写）。 */
+const CSS_BODY_FONT = `14px/${PREVIEW_LINE_HEIGHT}`
+/** 白色（CSS rgba 通道值）。 */
+const CSS_WHITE_CHANNEL = 255
+
 const html = `<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>dsh-session-migrate 界面模拟预览</title>
 <style>
 body{margin:0;padding:20px;background:#0f1117;color:#e8eaf0;
-  font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-.banner{max-width:900px;margin:0 0 14px;padding:10px 12px;border:1px dashed rgba(255,255,255,.18);
+  font:${CSS_BODY_FONT} -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+.banner{max-width:900px;margin:0 0 14px;padding:10px 12px;border:1px dashed rgba(${CSS_WHITE_CHANNEL},${CSS_WHITE_CHANNEL},${CSS_WHITE_CHANNEL},.18);
   border-radius:10px;color:#a0a6b4;font-size:12px}
 .banner b{color:#e8eaf0}
 #root{max-width:900px}

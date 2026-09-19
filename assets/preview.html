@@ -33287,9 +33287,9 @@ body{margin:0;padding:20px;background:#0f1117;color:#e8eaf0;
 window.__ERRORS__ = [];
 function __err(kind, msg) {
   window.__ERRORS__.push(kind + ': ' + msg);
-  var d = document.getElementById('__err');
-  if (!d) { d = document.createElement('pre'); d.id = '__err'; d.style.cssText = 'color:#f87171;white-space:pre-wrap;font-size:12px;border:1px solid #f87171;padding:8px;margin:0 0 12px'; document.body.insertBefore(d, document.body.firstChild); }
-  d.textContent += kind + ': ' + msg + String.fromCharCode(10);
+  var errBox = document.getElementById('__err');
+  if (!errBox) { errBox = document.createElement('pre'); errBox.id = '__err'; errBox.style.cssText = 'color:#f87171;white-space:pre-wrap;font-size:12px;border:1px solid #f87171;padding:8px;margin:0 0 12px'; document.body.insertBefore(errBox, document.body.firstChild); }
+  errBox.textContent += kind + ': ' + msg + String.fromCharCode(10);
 }
 window.addEventListener('error', function (e) { __err('error', e.message); });
 window.addEventListener('unhandledrejection', function (e) { __err('reject', String((e.reason && e.reason.stack) || e.reason)); });
@@ -33334,7 +33334,7 @@ window.__ctxMock = {
 // 响应形状必须与真实 Response 对齐：client.js 的 apiFetch 走 res.text() + JSON.parse
 // （不是 res.json()）；只给 json() 时页面停在「加载失败: res.text is not a function」。
 window.fetch = function (url, init) {
-  var u = String(url);
+  var urlStr = String(url);
   var json = function (body) {
     var text = JSON.stringify(body);
     return Promise.resolve({
@@ -33344,7 +33344,7 @@ window.fetch = function (url, init) {
       json: function () { return Promise.resolve(body); },
     });
   };
-  if (u.indexOf('/api/session-migrate/i18n') >= 0) {
+  if (urlStr.indexOf('/api/session-migrate/i18n') >= 0) {
     return json({ ok: true, zh: {
   "settings.title": "会话迁移",
   "settings.desc": "把旧版本日志（如 v0）投放到当前实例需要的版本契约上，由 DSH 在读取该条记录时自动完成版本迁移。",
@@ -33400,6 +33400,7 @@ window.fetch = function (url, init) {
   "convert.result": "转换完成: 成功 {ok} 个，失败 {fail} 个",
   "convert.failItem": "{id}: {err}",
   "convert.done": "已投放，DSH 读取该条记录即完成迁移",
+  "convert.deduped": "同 id 会话已存在于其它工作区：清理重复旧份 {n} 个（旧份已移入 session-backups，可恢复）",
   "convert.mode": "转换模式",
   "convert.modePlace": "投放（由 DSH 读取该条记录时迁移）",
   "convert.modeRewrite": "插件重写（尚未实现）",
@@ -33463,6 +33464,7 @@ window.fetch = function (url, init) {
   "convert.result": "Conversion done: {ok} succeeded, {fail} failed",
   "convert.failItem": "{id}: {err}",
   "convert.done": "Placed; DSH completes the migration when it reads the record",
+  "convert.deduped": "Session already exists in another workspace: {n} duplicate copy(ies) moved to session-backups (recoverable)",
   "convert.mode": "Conversion mode",
   "convert.modePlace": "Place (DSH migrates when it reads the record)",
   "convert.modeRewrite": "Plugin rewrite (not implemented yet)",
@@ -33473,7 +33475,7 @@ window.fetch = function (url, init) {
   "status.total": "Legacy total"
 } });
   }
-  if (u.indexOf('/api/session-migrate/convert') >= 0) {
+  if (urlStr.indexOf('/api/session-migrate/convert') >= 0) {
     var body = {};
     try { body = JSON.parse((init && init.body) || '{}'); } catch (e) { body = {}; }
     var ids = body.ids || [];
@@ -33487,7 +33489,7 @@ window.fetch = function (url, init) {
       }),
     });
   }
-  if (u.indexOf('/api/session-migrate/import') >= 0) {
+  if (urlStr.indexOf('/api/session-migrate/import') >= 0) {
     window.__IMPORTED__ = true;
     return json({
       ok: true,
@@ -33495,7 +33497,7 @@ window.fetch = function (url, init) {
       failed: [{ name: 'not-a-session.txt', err: '扩展名不受支持' }],
     });
   }
-  if (u.indexOf('/api/session-migrate/state') >= 0) return json(window.__FAKE__);
+  if (urlStr.indexOf('/api/session-migrate/state') >= 0) return json(window.__FAKE__);
   return json({ ok: true });
 };
 </script>
@@ -33593,18 +33595,18 @@ async function apiFetch(path, opts = {}) {
     init.headers = { 'content-type': 'application/json' };
     init.body = JSON.stringify(opts.body);
   }
-  const res = await fetch(apiUrl(path), init);
-  const text = await res.text();
-  let data;
+  const response = await fetch(apiUrl(path), init);
+  const text = await response.text();
+  let json;
   try {
-    data = text ? JSON.parse(text) : {};
+    json = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(`响应不是 JSON（HTTP ${res.status}）`);
+    throw new Error(`响应不是 JSON（HTTP ${response.status}）`);
   }
-  if (!res.ok && data?.ok !== true) {
-    throw new Error(data?.error ? String(data.error) : `HTTP ${res.status}`);
+  if (!response.ok && json?.ok !== true) {
+    throw new Error(json?.error ? String(json.error) : `HTTP ${response.status}`);
   }
-  return data;
+  return json;
 }
 
 // ───────────────────────── i18n ─────────────────────────
@@ -33685,10 +33687,10 @@ function subscribeDict(listener) {
 function loadDict() {
   fetch(apiUrl('/i18n'), { credentials: 'same-origin', signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
     .then((res) => (res.ok ? res.json() : null))
-    .then((data) => {
-      if (!data || typeof data !== 'object') return
+    .then((payload) => {
+      if (!payload || typeof payload !== 'object') return
       for (const lang of ['zh', 'en']) {
-        if (data[lang] && typeof data[lang] === 'object') remoteDict[lang] = data[lang]
+        if (payload[lang] && typeof payload[lang] === 'object') remoteDict[lang] = payload[lang]
       }
       for (const listener of dictListeners) {
         try { listener() } catch { /* 单个订阅者异常不影响其它 */ }
@@ -33699,12 +33701,17 @@ function loadDict() {
 
 // ───────────────────────── 样式 ─────────────────────────
 
+/** 正文行高（CSS line-height 单位倍数）。 */
+const CSS_LINE_HEIGHT = 1.5
+/** 标题字重（CSS font-weight）。 */
+const CSS_TITLE_WEIGHT = 600
+
 /** 页面样式（前缀 dshsm_ 避免与其它插件冲突）。 */
 const cssText = `
-.dshsm_root{display:flex;flex-direction:column;gap:14px;font-size:13px;line-height:1.5}
+.dshsm_root{display:flex;flex-direction:column;gap:14px;font-size:13px;line-height:${CSS_LINE_HEIGHT}}
 .dshsm_lead{color:var(--dsw-alias-label-secondary);font-size:12px;margin:0}
 .dshsm_card{border:1px solid var(--dsw-alias-border-l1);border-radius:10px;padding:12px}
-.dshsm_cardTitle{font-size:13px;font-weight:600;margin:0 0 8px}
+.dshsm_cardTitle{font-size:13px;font-weight:${CSS_TITLE_WEIGHT};margin:0 0 8px}
 .dshsm_grid{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px}
 .dshsm_key{color:var(--dsw-alias-label-tertiary);white-space:nowrap}
 .dshsm_val{font-family:var(--dsw-font-mono);word-break:break-all}
@@ -33751,10 +33758,10 @@ function fmtSize(n) {
   if (!Number.isFinite(num) || num < 0) return '-'
   if (num < 1024) return `${num} B`
   const units = ['KB', 'MB', 'GB']
-  let value = num / 1024
-  let i = 0
-  while (value >= 1024 && i < units.length - 1) { value /= 1024; i += 1 }
-  return `${value.toFixed(1)} ${units[i]}`
+  let scaled = num / 1024
+  let idx = 0
+  while (scaled >= 1024 && idx < units.length - 1) { scaled /= 1024; idx += 1 }
+  return `${scaled.toFixed(1)} ${units[idx]}`
 }
 
 /**
@@ -33996,15 +34003,15 @@ async function uploadLegacyFiles(picked, ctx) {
   try {
     const form = new FormData()
     for (const f of files) form.append('files', f, f.name)
-    const res = await fetch(apiUrl('/import'), {
+    const response = await fetch(apiUrl('/import'), {
       method: 'POST',
       credentials: 'same-origin',
       body: form,
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS * 4),
     })
-    const result = await res.json()
-    const ok = result?.imported?.length ?? 0
-    const failed = result?.failed ?? []
+    const payload = await response.json()
+    const ok = payload?.imported?.length ?? 0
+    const failed = payload?.failed ?? []
     const detail = failed.map((f) => tr('import.failItem', { name: f.name, err: f.err })).join(' ; ')
     setNotice({
       ok: failed.length === 0,
@@ -34181,6 +34188,7 @@ async function convertSelected(selected, workspace, ctx) {
 function convertNotice(results) {
   const succeeded = results.filter((x) => x.ok).length
   const failure = results.filter((x) => !x.ok)
+  const removed = results.reduce((n, x) => n + (Array.isArray(x.removedDuplicates) ? x.removedDuplicates.length : 0), 0)
   const detail = failure
     .map((x) => tr('convert.failItem', { id: String(x.id).slice(0, ID_NOTICE_LEN), err: x.error }))
     .join(' ; ')
@@ -34188,6 +34196,7 @@ function convertNotice(results) {
     ok: failure.length === 0,
     text: tr('convert.result', { ok: succeeded, fail: failure.length })
       + (succeeded ? ` · ${tr('convert.done')}` : '')
+      + (removed > 0 ? ` · ${tr('convert.deduped', { n: removed })}` : '')
       + (detail ? ' · ' + detail : ''),
   }
 }
@@ -34266,10 +34275,19 @@ function registerSettingsSection(ctx, React) {
     order: SETTINGS_SECTION_ORDER,
     label: () => tr('settings.title'),
   }
-  slots.inject('settings.section', () => slots.register(
-    section,
-    () => React.createElement(MigratePage, null),
-  ))
+  slots.inject('settings.section', () => injectSection(slots, section, React))
+}
+
+/**
+ * 把分区注册进 slots 服务（独立函数避免 inject 回调内再嵌回调）。
+ *
+ * @param {object} slots - 宿主 slots 服务。
+ * @param {object} section - 分区定义。
+ * @param {Function} React - 宿主注入的 React。
+ * @returns {void}
+ */
+function injectSection(slots, section, React) {
+  slots.register(section, () => React.createElement(MigratePage, null))
 }
 
 // ───────────────────────── 注册 ─────────────────────────
