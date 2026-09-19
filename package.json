@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-migrate",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "DSH 会话迁移插件：扫描 .dsh/session.old/ 下的旧版本会话（v0 等），按实例实际会话版本契约投放并改写 cwd 绑定工作区，由 DSH 在打开会话时自动完成版本迁移；设置侧边栏提供导入 / 列表 / 工作区选择 / 转换四项 UI，外置多语言。",
   "type": "module",
   "main": "lib/index.js",
