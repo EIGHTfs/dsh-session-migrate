@@ -1,0 +1,9 @@
+node_modules/
+*.log
+.DS_Store
+node_modules.orig/
+# 合并/迁移过程中的本地备份（不入库）
+.merge-backup/
+.migtest*/
+# 本地抢修备份（如 client.js.bak-YYYYMMDD），不入库
+*.bak-*
