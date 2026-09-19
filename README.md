@@ -155,6 +155,7 @@ mkdir -p /tmp/rd/umd && curl -sSL -o /tmp/rd/umd/react-dom.development.js \
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
+| 1.0.1 | 2026-09-19 | 浏览器半侧 `lib/client.js` 内部整理（不拆文件、不引入构建链——DSH 只读 `exports["./client"]` 的单文件，官方插件同样是「源码分多文件 + 打包成单文件」，行数由段落注释与小函数承担）。消除两份事实来源：源码内联的 14 个词条兜底删去，只保留首屏同步渲染必需的 `settings.title` / `common.loading`，权威字典统一为 `lib/i18n/{zh,en}.json`（各 62 键，实测覆盖代码用到的全部 45 键）；`renderStatus` 拆为 `renderStatusHeader` / `renderStatusGrid` / `renderStatusBadges`；`createModule` 里的槽注册抽成 `registerDictionary` / `registerSettingsSection`，`apply` 从 5 层嵌套降为平铺；ID 截断长度 20 / 12 提为 `ID_DISPLAY_LEN` / `ID_NOTICE_LEN` 命名常量。修 TDZ 隐患：`window.__ModuleLoader__.load(...)` 从文件中部移到末尾，原先依赖函数提升、若 factory 被同步调用会命中常量 TDZ。 |
 | 1.0.0 | 2026-09-19 | 首个正式版。设置侧边栏页面（环境 / 导入 / 列表 / 转换四分区）与迁移引擎（`lib/engine/*`）合并为单一实现：插件入口 `lib/index.js`，浏览器半侧入口 `lib/client.js`（经 `exports["./client"]` 声明，与官方 `@deepseek-ai/dsh-client-*` 同构）；含 WebSocket 触发迁移、HTTP 接口与工作区探测。新增界面预览生成器 `assets/preview-gen.mjs` + `assets/lib/{fixture,serve}.mjs`（跑真实 `lib/client.js` + 垫片宿主，内联 React/ReactDOM UMD 输出单文件 `preview.html`，`--serve` 起局域网静态服务器并拦截路径穿越）。修复：导入选文件后误报「未选择任何文件」（`onPick` 先取 `Array.from` 快照再清空 `input.value`，避免拿到被清空的活视图 FileList）；两处占位符未替换（`import.desc` 的 `{dir}`、作为标签使用的 `status.badgeTotal` 改为独立词条 `status.total`）；浏览器半侧整体包 IIFE，避免与同为手写插件的 `dsh-skill-scoreboard` 在 client 聚合中顶层声明重名（10 个）导致 `Failed to load plugins` |
 
 
