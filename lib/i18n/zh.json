@@ -53,6 +53,7 @@
   "convert.result": "转换完成: 成功 {ok} 个，失败 {fail} 个",
   "convert.failItem": "{id}: {err}",
   "convert.done": "已投放，DSH 读取该条记录即完成迁移",
+  "convert.deduped": "同 id 会话已存在于其它工作区：清理重复旧份 {n} 个（旧份已移入 session-backups，可恢复）",
   "convert.mode": "转换模式",
   "convert.modePlace": "投放（由 DSH 读取该条记录时迁移）",
   "convert.modeRewrite": "插件重写（尚未实现）",

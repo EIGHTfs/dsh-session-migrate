@@ -53,6 +53,7 @@
   "convert.result": "Conversion done: {ok} succeeded, {fail} failed",
   "convert.failItem": "{id}: {err}",
   "convert.done": "Placed; DSH completes the migration when it reads the record",
+  "convert.deduped": "Session already exists in another workspace: {n} duplicate copy(ies) moved to session-backups (recoverable)",
   "convert.mode": "Conversion mode",
   "convert.modePlace": "Place (DSH migrates when it reads the record)",
   "convert.modeRewrite": "Plugin rewrite (not implemented yet)",

@@ -7,3 +7,4 @@ node_modules.orig/
 .migtest*/
 # 本地抢修备份（如 client.js.bak-YYYYMMDD），不入库
 *.bak-*
+*.tgz

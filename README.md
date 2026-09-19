@@ -36,6 +36,7 @@ DSH 会话日志格式是**预发布格式**，随 harness 版本演进（v0 →
 | 导入 | `POST /import` | multipart 上传或 JSON `{paths}`；支持 `.jsonl` / `.jsonl.zstd` / `.zip` |
 | 转换 | `POST /convert` | 投放 + 触发迁移，可传 `trigger:false` 只投放 |
 | 布局修复 | `POST /fix-layout` | 移出 `sessions/` 下非法裸目录（否则工作区列表全空） |
+| 转换去重 | `POST /convert` 内置 | 转换时按会话 id 全工作区查重：同 id 已存在于其它工作区则**提示并移出旧份备份（可恢复），重新转换**到本次目标工作区，杜绝「一个会话两次恢复到不同工作区」 |
 | CLI | `node cli.mjs` | `list` / `check` / `fix` / `import`，可脱离 DSH 独立运行 |
 
 ## 用法
@@ -97,7 +98,7 @@ lib/
     zip.js           最小 zip 解包（导入时把导出包解开成标准目录形式）
     layout.js        cwd 编码、目标路径推导、布局校验
     target.js        版本探测与迁移边规划（不硬编码版本号）
-    import.js        投放（备份 + 转码 + 重建首帧 + 子会话）
+    import.js        投放（跨工作区去重 + 备份 + 转码 + 重建首帧 + 子会话）
     inspect.js       体检与布局修复
 test/
   test-client.mjs    client 契约自测（模块装配 / 槽注册 / 同步文案）
@@ -156,7 +157,7 @@ mkdir -p /tmp/rd/umd && curl -sSL -o /tmp/rd/umd/react-dom.development.js \
 
 | 版本 | 日期 | 变更 |
 |---|---|---|
-| 1.0.2 | 2026-09-19 | 修复 `.zip` 导出包**导得进、列不出、转不了**：导入接口接受 `.zip`，但旧会话扫描只认 `.jsonl` / `.jsonl.zstd`，两者口径不一致，zip 落盘后扫描不到，`/convert` 会以「会话不在列表里」失败。改为**导入时即解包**成标准目录形式 `<会话id>/session.jsonl`，后续列表 / 转换全走既有路径。新增 `lib/engine/zip.js`：零依赖最小解包（只用 `node:zlib`），**走中央目录**定位数据——导出工具常在本地头把长度写 0 并改用 data descriptor，照本地头解析会得到 0 长度而解不出内容；条目名统一剥成基名挡路径穿越，解压后校验体积上限挡 zip 炸弹。导入语义统一为「同名覆盖 + 覆盖前留底」（原先会另起带时间戳的新目录，导致同一会话在列表里出现多条）；扫描跳过 `*.before-import-*` 留底目录并按会话 id 去重。 |
+| 1.0.2 | 2026-09-19 | 修复 `.zip` 导出包**导得进、列不出、转不了**：导入接口接受 `.zip`，但旧会话扫描只认 `.jsonl` / `.jsonl.zstd`，两者口径不一致，zip 落盘后扫描不到，`/convert` 会以「会话不在列表里」失败。改为**导入时即解包**成标准目录形式 `<会话id>/session.jsonl`，后续列表 / 转换全走既有路径。新增 `lib/engine/zip.js`：零依赖最小解包（只用 `node:zlib`），**走中央目录**定位数据——导出工具常在本地头把长度写 0 并改用 data descriptor，照本地头解析会得到 0 长度而解不出内容；条目名统一剥成基名挡路径穿越，解压后校验体积上限挡 zip 炸弹。导入语义统一为「同名覆盖 + 覆盖前留底」（原先会另起带时间戳的新目录，导致同一会话在列表里出现多条）；扫描跳过 `*.before-import-*` 留底目录并按会话 id 去重。**另：转换内置全工作区去重**——同一会话 id 已存在于其它工作区（不同 cwd 目录）时，提示并把旧份整体移出到 `session-backups/`（可恢复，非物理删除），再转换到本次目标工作区，杜绝「一个会话两次恢复到不同工作区」的重复副本；CLI `import` 与 `/convert` 均生效。 |
 | 1.0.1 | 2026-09-19 | 浏览器半侧 `lib/client.js` 内部整理（不拆文件、不引入构建链——DSH 只读 `exports["./client"]` 的单文件，官方插件同样是「源码分多文件 + 打包成单文件」，行数由段落注释与小函数承担）。消除两份事实来源：源码内联的 14 个词条兜底删去，只保留首屏同步渲染必需的 `settings.title` / `common.loading`，权威字典统一为 `lib/i18n/{zh,en}.json`（各 62 键，实测覆盖代码用到的全部 45 键）；`renderStatus` 拆为 `renderStatusHeader` / `renderStatusGrid` / `renderStatusBadges`；`createModule` 里的槽注册抽成 `registerDictionary` / `registerSettingsSection`，`apply` 从 5 层嵌套降为平铺；ID 截断长度 20 / 12 提为 `ID_DISPLAY_LEN` / `ID_NOTICE_LEN` 命名常量。修 TDZ 隐患：`window.__ModuleLoader__.load(...)` 从文件中部移到末尾，原先依赖函数提升、若 factory 被同步调用会命中常量 TDZ。 |
 | 1.0.0 | 2026-09-19 | 首个正式版。设置侧边栏页面（环境 / 导入 / 列表 / 转换四分区）与迁移引擎（`lib/engine/*`）合并为单一实现：插件入口 `lib/index.js`，浏览器半侧入口 `lib/client.js`（经 `exports["./client"]` 声明，与官方 `@deepseek-ai/dsh-client-*` 同构）；含 WebSocket 触发迁移、HTTP 接口与工作区探测。新增界面预览生成器 `assets/preview-gen.mjs` + `assets/lib/{fixture,serve}.mjs`（跑真实 `lib/client.js` + 垫片宿主，内联 React/ReactDOM UMD 输出单文件 `preview.html`，`--serve` 起局域网静态服务器并拦截路径穿越）。修复：导入选文件后误报「未选择任何文件」（`onPick` 先取 `Array.from` 快照再清空 `input.value`，避免拿到被清空的活视图 FileList）；两处占位符未替换（`import.desc` 的 `{dir}`、作为标签使用的 `status.badgeTotal` 改为独立词条 `status.total`）；浏览器半侧整体包 IIFE，避免与同为手写插件的 `dsh-skill-scoreboard` 在 client 聚合中顶层声明重名（10 个）导致 `Failed to load plugins` |
 
