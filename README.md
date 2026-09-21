@@ -32,23 +32,51 @@ DSH 会话日志格式是**预发布格式**，随 harness 版本演进（v0 →
 |---|---|---|
 | 旧会话扫描 | `legacy.js` | 扫描 `session.old/`，读出 id / 版本 / cwd / 帧结构 |
 | 体检与迁移路径 | `GET /check` | 首帧契约、帧数、目标版本能力、`v0→v1→v2→v3` 规划 |
+| 内容缺陷扫描 | `GET /scan` / `CLI scan` | 只读诊断内容级缺陷（见「内容缺陷修复」） |
+| 内容缺陷修复 | `POST /repair` / `CLI repair` | 备份 → 修复 → 离线迁移链校验 → 落盘（见「内容缺陷修复」） |
+| 迁移链实跑验证 | `CLI validate` | 用目标实例自带格式目录离线跑完整 `v0→v1→v2→v3`，验证日志能否被真实迁移链接受 |
 | 工作区探测 | `GET /workspaces` | 候选工作区列表 |
 | 导入 | `POST /import` | multipart 上传或 JSON `{paths}`；支持 `.jsonl` / `.jsonl.zstd` / `.zip` |
 | 转换 | `POST /convert` | 投放 + 触发迁移，可传 `trigger:false` 只投放 |
 | 布局修复 | `POST /fix-layout` | 移出 `sessions/` 下非法裸目录（否则工作区列表全空） |
 | 转换去重 | `POST /convert` 内置 | 转换时按会话 id 全工作区查重：同 id 已存在于其它工作区则**提示并移出旧份备份（可恢复），重新转换**到本次目标工作区，杜绝「一个会话两次恢复到不同工作区」 |
-| CLI | `node cli.mjs` | `list` / `check` / `fix` / `import`，可脱离 DSH 独立运行 |
+| CLI | `node cli.mjs` | `list` / `check` / `scan` / `validate` / `fix` / `import` / `repair`，可脱离 DSH 独立运行 |
+
+## 内容缺陷修复
+
+旧版写入器（或第三方工具改写）可能在 v0 日志里留下**内容级缺陷**——结构上仍是合法
+JSON 行、首帧契约也满足，但缺关键的关联字段，DSH 打开时迁移链拒绝、报
+`history unavailable`。这类缺陷只有读内容才能发现，`check` 的帧级体检看不到。
+
+已识别的可修复缺陷（`lib/engine/repair.js`）：
+
+| 缺陷 | 表现 | 修复方式 |
+|---|---|---|
+| `packedChunkMissingId/Name` | `tool-call-chunks` 分片行 id/name 为空 | 从同 turn/step/index 的 `tool-call-delta` 流取回 |
+| `blockEndMissingId/Name` | `assistant/chunk` 的 block-end 块 id/name 为空 | 同上取回 |
+| `messageToolCallMissingName` | `assistant/message` 里 tool-call 块 name 为空 | 从广播/结果侧补回 |
+| `toolCallMissingName` | `tool/call` 的 name 为空 | 同上 |
+| `toolCallArgumentMismatch` | `tool/call` 的 arguments 与消息声明不一致 | 以**不含 U+FFFD 替换字符**的一侧为准对齐（canonical 与证明同源于写入链路的 U+FFFD 一侧） |
+
+修复的安全链：**备份**到 `<文件同目录><basename>.repair-bak-<时间戳>/` → 只重写变化行
+（最小差异，缺 delta 参考的行进 `skipped` 不硬改）→ 用目标实例自带的格式目录**离线跑
+完整迁移链**预校验 → 校验通过才 `textToZstd` 原子写（temp + rename）落盘；校验失败
+拒绝写入、catalog 不可用时仅警告。全程零依赖、只读扫描不改动输入。
 
 ## 用法
 
 ### CLI
 
 ```bash
-node cli.mjs list   <DSH_HOME>                     # 列会话与布局问题
-node cli.mjs check  <文件> [--home <DSH_HOME>]     # 单文件体检（含目标版本与迁移路径）
-node cli.mjs fix    <DSH_HOME>                     # 移出 sessions/ 下非法裸目录
-node cli.mjs import <源文件|源目录> <DSH_HOME>     # 双路径导入（含 subagents）
-node cli.mjs import <源> <DSH_HOME> --cwd <cwd>    # 指定目标 cwd
+node cli.mjs list     <DSH_HOME>                     # 列会话与布局问题
+node cli.mjs check    <文件> [--home <DSH_HOME>]     # 单文件体检（含目标版本与迁移路径）
+node cli.mjs scan     <文件>                         # 内容缺陷扫描（只读；阻塞>0 退出码 3）
+node cli.mjs validate <文件> [--home <DSH_HOME>]     # 离线跑完整 v0→v1→v2→v3 迁移链（只读）
+node cli.mjs fix      <DSH_HOME>                     # 移出 sessions/ 下非法裸目录
+node cli.mjs import   <源文件|源目录> <DSH_HOME>     # 双路径导入（含 subagents）
+node cli.mjs import   <源> <DSH_HOME> --cwd <cwd>    # 指定目标 cwd
+node cli.mjs repair   <文件> [--home <DSH_HOME>]     # 备份 → 内容修复 → 迁移链校验 → 落盘
+                      [--dry-run] [--yes] [--no-validate] [--no-fix-arguments]
 ```
 
 ### HTTP
@@ -56,6 +84,10 @@ node cli.mjs import <源> <DSH_HOME> --cwd <cwd>    # 指定目标 cwd
 ```bash
 curl -s localhost:30801/api/session-migrate/state
 curl -s 'localhost:30801/api/session-migrate/check?file=<会话文件绝对路径>'
+curl -s 'localhost:30801/api/session-migrate/scan?file=<会话文件绝对路径>'
+curl -s -X POST localhost:30801/api/session-migrate/repair \
+  -H 'content-type: application/json' \
+  -d '{"file":"<会话文件绝对路径>","dryRun":true}'
 curl -s -X POST localhost:30801/api/session-migrate/convert \
   -H 'content-type: application/json' \
   -d '{"ids":["session-xxx"],"cwd":"/path/工作区/测试","trigger":true}'
@@ -93,15 +125,18 @@ lib/
   legacy.js          旧会话扫描与索引
   workspace.js       工作区候选探测
   i18n/{zh,en}.json  外置多语言字典
-  engine/            迁移引擎（帧 / 布局 / 版本 / 导入 / 体检）
-    zstd.js          帧级读写与首帧契约
+  engine/            迁移引擎（帧 / 布局 / 版本 / 导入 / 体检 / 修复）
+    zstd.js          帧级读写、首帧契约、多帧全量解码（decodeFull）与内存重编码（textToZstd）
     zip.js           最小 zip 解包（导入时把导出包解开成标准目录形式）
     layout.js        cwd 编码、目标路径推导、布局校验
     target.js        版本探测与迁移边规划（不硬编码版本号）
     import.js        投放（跨工作区去重 + 备份 + 转码 + 重建首帧 + 子会话）
     inspect.js       体检与布局修复
+    repair.js        内容缺陷扫描与修复（scanLog / repairLogText / planRepair）
+    validate.js      离线迁移链验证（catalogCandidates / loadCatalog / validateMigrationChain）
 test/
   test-client.mjs    client 契约自测（模块装配 / 槽注册 / 同步文案）
+  test-repair.mjs    repair 引擎自测（内容缺陷扫描 / 修复 / zstd 往返）
 ```
 
 浏览器半侧与官方约定一致：入口声明在 `package.json` 的 `exports["./client"]`
