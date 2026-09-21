@@ -183,6 +183,59 @@ function cmdFix(rest) {
 }
 
 /** repair：备份 → 内容修复 → 迁移链校验 → 落盘 */
+/** 打印修复计划（缺陷前/后计数、修复统计、无法自动修复项）。 */
+function printRepairPlan(repaired) {
+  console.log(`待修复行数: ${repaired.changedLines.length}`);
+  console.log(`  缺陷前: ${JSON.stringify(repaired.before.counts)}`);
+  console.log(`  缺陷后: ${JSON.stringify(repaired.after.counts)}`);
+  console.log(`  修复统计: ${JSON.stringify(repaired.stats)}`);
+  if (repaired.skipped.length) {
+    console.log(`  无法自动修复 ${repaired.skipped.length} 处:`);
+    for (const s of repaired.skipped) console.log(`    L${s.line} ${s.kind}: ${s.reason}`);
+  }
+}
+
+/** 打印迁移链校验结果的单行摘要。 */
+function renderChainResult(validation) {
+  if (validation === null) return '  迁移链: 未校验';
+  if (validation.ok) return `  迁移链: 通过 ✅ (${validation.events} 个 v3 事件)`;
+  if (validation.skipped) return `  迁移链: 跳过（${validation.skipped}）`;
+  return `  迁移链: 失败 ❌ ${validation.error}`;
+}
+
+/** 修复确认后落盘：备份原文件 → textToZstd 原子写（temp + rename）。 */
+function writeRepair(file, repaired, plaintext, originalBytes) {
+  const backupDir = join(dirname(file), `${basename(file)}.repair-bak-${stamp()}`);
+  mkdirSync(backupDir, { recursive: true });
+  const backupPath = join(backupDir, basename(file));
+  copyFileSync(file, backupPath);
+  console.log(`  已备份 → ${backupPath}`);
+  const encoded = textToZstd(repaired.text);
+  const temp = file + '.tmp-' + process.pid;
+  writeFileSync(temp, encoded);
+  renameSync(temp, file);
+  console.log(`  已落盘 → ${file}（${plaintext ? '明文' : 'zstd'} ${(originalBytes / 1024).toFixed(1)}KB → ${(repaired.text.length / 1024).toFixed(1)}KB）`);
+}
+
+/** dry-run 报告：印出预校验结论并给退出码。 */
+function reportDryRun(validation) {
+  console.log('');
+  console.log('[dry-run] 未写入任何文件。预校验：' +
+    (validation === null ? '未执行' : validation.ok ? '通过 ✅' : validation.skipped ? `跳过（${validation.skipped}）` : `仍失败 ❌ ${validation.error}`));
+  return (validation === null || validation.ok) ? 0 : 2;
+}
+
+/** 校验未通过（catalog 可用）→ 拒绝写入；否则返回 null 放行。 */
+function rejectIfValidationFails(validation) {
+  if (validation !== null && validation.ok === false && validation.skipped === undefined) {
+    console.error('拒绝写入：修复后的日志仍无法通过迁移链校验。');
+    console.error(validation.error);
+    return 2;
+  }
+  return null;
+}
+
+/** repair：备份 → 内容修复 → 迁移链校验 → 落盘 */
 async function cmdRepair(rest) {
   const file = rest[0];
   const homeOpt = pickArg(rest, '--home');
@@ -202,59 +255,24 @@ async function cmdRepair(rest) {
       return before.blocking > 0 ? 3 : 0;
     }
 
-    console.log(`待修复行数: ${repaired.changedLines.length}`);
-    console.log(`  缺陷前: ${JSON.stringify(repaired.before.counts)}`);
-    console.log(`  缺陷后: ${JSON.stringify(repaired.after.counts)}`);
-    console.log(`  修复统计: ${JSON.stringify(repaired.stats)}`);
-    if (repaired.skipped.length) {
-      console.log(`  无法自动修复 ${repaired.skipped.length} 处:`);
-      for (const s of repaired.skipped) console.log(`    L${s.line} ${s.kind}: ${s.reason}`);
-    }
+    printRepairPlan(repaired);
 
-    // 迁移链预校验（修复后的文本）
     let validation = null;
     if (doValidate) {
       validation = await validateMigrationChain(repaired.text, { dshHome: homeOpt })
         .catch((e) => ({ ok: false, error: String(e?.message ?? e) }));
     }
 
-    if (dryRun) {
-      console.log('');
-      console.log('[dry-run] 未写入任何文件。预校验：' +
-        (validation === null ? '未执行' : validation.ok ? '通过 ✅' : validation.skipped ? `跳过（${validation.skipped}）` : `仍失败 ❌ ${validation.error}`));
-      return (validation === null || validation.ok) ? 0 : 2;
-    }
-
+    if (dryRun) return reportDryRun(validation);
     if (!yes) {
       console.error('需要确认。请加 --yes 执行，或加 --dry-run 只预览。');
       return 1;
     }
+    const rejected = rejectIfValidationFails(validation);
+    if (rejected !== null) return rejected;
 
-    // 校验未通过 → 拒绝写入（除非 catalog 不可用，此时仅警告）
-    if (validation !== null && validation.ok === false && validation.skipped === undefined) {
-      console.error('拒绝写入：修复后的日志仍无法通过迁移链校验。');
-      console.error(validation.error);
-      return 2;
-    }
-
-    // 备份原文件 → 落盘（原子写：临时文件 + rename）
-    const backupDir = join(dirname(file), `${basename(file)}.repair-bak-${stamp()}`);
-    mkdirSync(backupDir, { recursive: true });
-    const backupPath = join(backupDir, basename(file));
-    copyFileSync(file, backupPath);
-    console.log(`  已备份 → ${backupPath}`);
-
-    const encoded = textToZstd(repaired.text);
-    const temp = file + '.tmp-' + process.pid;
-    writeFileSync(temp, encoded);
-    renameSync(temp, file);
-    console.log(`  已落盘 → ${file}（${plaintext ? '明文' : 'zstd'} ${(text.length / 1024).toFixed(1)}KB → ${(repaired.text.length / 1024).toFixed(1)}KB）`);
-
-    if (validation !== null) {
-      console.log(`  迁移链: ${validation.ok ? `通过 ✅ (${validation.events} 个 v3 事件)` : validation.skipped ? `跳过（${validation.skipped}）` : `失败 ❌ ${validation.error}`}`);
-    } else {
-      console.log('  迁移链: 未校验');
-    }
+    writeRepair(file, repaired, plaintext, text.length);
+    console.log(renderChainResult(validation));
     return (validation === null || validation.ok) ? 0 : 2;
   } catch (e) {
     return cliFail(e);
