@@ -38,14 +38,5 @@
   "docs/CHANGELOG.md": "版本记录明细（1.0.0~1.0.4 逐版本 changelog，README 链接引用）",
   "docs/FUNCTIONS.md": "函数列表（doc-func 生成：各文件函数名/行号/行数/签名）",
   "docs/TREE.md": "文件目录树（doc-tree 生成：tree-doc.json 注释映射）",
-  "tree-doc.json": "文件树注释映射（{路径: 一句话介绍}，手动维护）",
-  "_meta": {
-    "worktree": {
-      "docs/": {
-        "status": "A",
-        "mtime": "2026-09-26T22:21:30.629Z",
-        "note": "注释可能需更新"
-      }
-    }
-  }
+  "tree-doc.json": "文件树注释映射（{路径: 一句话介绍}，手动维护）"
 }
