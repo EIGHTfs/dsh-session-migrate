@@ -5,10 +5,11 @@
 //   ① expectedLogName 的映射规则；
 //   ② fixSessionNames 能检出并（仅改名、不动内容地）修复。
 import { mkdtempSync, mkdirSync, writeFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { textToZstd } from '../lib/engine/zstd.js';
-import { expectedLogName, fixSessionNames } from '../lib/engine/layout.js';
+import { expectedLogName, fixSessionNames, placeAttachments, checkAttachments } from '../lib/engine/layout.js';
 
 let failed = 0;
 /** 断言并打印 */
@@ -49,6 +50,30 @@ check('目录里只剩 v4 名字', readdirSync(sessionDir).filter((n) => n.endsW
 // 5. 再跑一次应当「无不一致」（幂等）
 const again = fixSessionNames(home, { apply: false });
 check('修复后幂等（无不一致）', again.mismatched.length === 0);
+
+// 6. 附件：media/ 里的内容按 sha256 落进 <home>/attachments/v1/objects/<2>/<sha>
+{
+  const attHome = mkdtempSync(join(tmpdir(), 'dsh-migrate-att-'));
+  const stage = mkdtempSync(join(tmpdir(), 'dsh-migrate-att-src-'));
+  mkdirSync(join(stage, 'media'), { recursive: true });
+  const jpg = Buffer.from('fake-jpeg-bytes-for-test');
+  const digest = createHash('sha256').update(jpg).digest('hex');
+  writeFileSync(join(stage, 'media', `sha256:${digest}.jpg`), jpg);
+  // 一个内容与文件名不符的附件（必须被拒）
+  writeFileSync(join(stage, 'media', `sha256:${'0'.repeat(64)}.jpg`), Buffer.from('mismatch'));
+
+  const placed = placeAttachments(stage, attHome);
+  check('附件落盘 1 个', placed.copied === 1);
+  check('摘要不符被拒', placed.invalid.length === 1);
+  check('附件对象存在', existsSync(join(attHome, 'attachments', 'v1', 'objects', digest.slice(0, 2), digest)));
+
+  const ref = `{"attachments":["sha256:${digest}","sha256:${'a'.repeat(64)}"]}`;
+  const res = checkAttachments(ref, attHome);
+  check('引用统计 2 个', res.referenced === 2);
+  check('缺失只报没有的那个', res.missing.length === 1 && res.missing[0] === 'a'.repeat(64));
+  rmSync(attHome, { recursive: true, force: true });
+  rmSync(stage, { recursive: true, force: true });
+}
 
 rmSync(home, { recursive: true, force: true });
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`);
