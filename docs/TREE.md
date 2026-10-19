@@ -22,14 +22,9 @@ dsh-session-migrate/
 │   ├── i18n/ — 外置多语言字典
 │   │   ├── en.json — 英文词条
 │   │   ├── zh.json — 中文词条
-├── assets/ — 界面预览相关（预览页生成器 + 假数据 + 静态服务器）
-│   ├── preview-gen.mjs — 预览页生成器（跑真实 lib/client.js，垫片宿主环境；--serve 起静态服务器）
-│   ├── preview.html — 生成物：单文件自包含预览页（内联 React/ReactDOM UMD + 假数据接口）
-│   ├── lib/ — 预览辅助库
-│   │   ├── fixture.mjs — 预览用假数据（/state 响应体，覆盖各状态分支）
-│   │   ├── serve.mjs — 局域网静态服务器（只读托管 assets，拦截路径穿越）
+├── assets/ — 预览描述（供 dsh-useful-tools 的 preview 工具消费）
+│   ├── preview.spec.mjs — 预览标题声明（垫片与组件挂载由 useful-tools harness 提供）
 ├── test/ — 自测脚本
-│   ├── .test — 审计豁免标记（测试目录 fixture 魔数不入审）
 │   ├── test-client.mjs — client 契约自测（模块装配 / 槽注册 / 同步文案）
 │   ├── test-repair.mjs — repair 引擎自测（内容缺陷扫描 / 修复 / zstd 往返）
 ├── docs/ — 分体式文档（文件树/函数列表/版本记录，README 链接引用）

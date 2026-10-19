@@ -117,7 +117,7 @@ v0 布局是**每行一个独立 zstd frame**，且首帧必须正好是 header 
 ```text
 dsh-session-migrate/
 ├── lib/           插件核心实现（入口/路由/WebSocket/浏览器半侧/引擎）
-├── assets/        界面预览（preview-gen.mjs 生成器 + preview.html + 假数据 + 静态服务器）
+├── assets/        预览描述（preview.spec.mjs，供 dsh-useful-tools 的 preview 工具消费）
 ├── docs/          分体式文档（文件树 / 函数列表 / 版本记录，README 链接引用）
 ├── test/          自测脚本（test-client / test-repair）
 ├── cli.mjs        命令行入口（零依赖可独立运行）
@@ -133,32 +133,23 @@ dsh-session-migrate/
 每项能力只有一份实现：版本探测统一走 `engine/target.js`，帧读写统一走
 `engine/zstd.js`，触发迁移统一走 `follow.js`（Node）。
 
-## 界面预览
+## 界面预览与最小宿主
 
-`assets/preview-gen.mjs` 生成一个**单文件自包含**的界面预览页：它加载仓库里真实的
-`lib/client.js`（不是另写的 mockup），只垫片宿主环境（`__ModuleLoader__` / `require` /
-`locale` / `slots` / `fetch`），因此界面与真实插件一致，也能暴露真实渲染与交互缺陷。
+预览与最小宿主**统一由 `dsh-useful-tools` 插件提供**，本仓库不再自持生成器、静态服务器与假数据：
 
-```sh
-node assets/preview-gen.mjs            # 生成 assets/preview.html
-node assets/preview-gen.mjs --serve    # 生成并用局域网静态服务器托管（默认端口 8099）
-PORT=8080 node assets/preview-gen.mjs --serve
-```
-
-生成物内联 React 与 ReactDOM 的 UMD 构建，双击即开、离线可用，不需要 DSH 在运行。
-预览页里的数据是假的（覆盖待转换 / 已转换 / 不可迁移 / 不可读 / cwd 越界各分支），
-勾选、选工作区、导入、转换都可点，改动只留在页面内，不写任何文件。
-
-React 的 UMD 从 DSH 安装根的 pnpm store 取；ReactDOM 常未随 DSH 安装，生成器会依次
-查 DSH 数据目录下的 `cache/react-umd/` 与 `/tmp/rd/`，都没有时按提示下载即可：
+- 界面预览：`preview` 工具（`gen` 生成单文件预览页 / `serve` 局域网托管，可反代后端）
+- 服务端模拟：`minihost` 工具（`start` 起最小宿主跑本插件真实服务端代码 / `call` / `stop`）
 
 ```sh
-mkdir -p /tmp/rd/umd && curl -sSL -o /tmp/rd/umd/react-dom.development.js \
-  https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js
+# 在 DSH 里以 AI 工具调用（不是本仓库的脚本）
+preview({ action: "gen",   plugin: "<本仓库根>" })
+minihost({ action: "start", plugin: "<本仓库根>", port: 31199 })
+preview({ action: "serve", file: "<生成的 preview.html>", port: 31188, backend: "http://127.0.0.1:31199" })
 ```
 
-`DSH_ROOT` / `REACT_UMD_DIR` / `REACT_DOM_UMD_DIR` 可显式覆盖查找结果。
-
+预览页加载的是仓库里真实的 `lib/client.js`（不是另写的 mockup），模块装载 / `locale` /
+`slots` / `fetch` 垫片由 useful-tools 的 harness 提供；数据来源由 `backend` 决定
+（最小宿主或真实实例），改动只留在页面内，不写任何文件到本仓库。
 ## 设置侧边栏
 
 `lib/client.js` 挂载「设置 → 侧边栏 → 会话迁移」，四个分区：
