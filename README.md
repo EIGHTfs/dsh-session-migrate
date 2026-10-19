@@ -144,21 +144,28 @@ dsh-session-migrate/
 ## 界面预览与最小宿主
 
 预览与最小宿主**统一由 `dsh-useful-tools` 插件提供**，本仓库不自持生成器、静态服务器、假数据，
-也不带 `preview.spec.mjs`——连预览标题都由它按插件目录名自动生成：
-
-- 界面预览：`preview` 工具（`gen` 生成单文件预览页 / `serve` 局域网托管，可反代后端）
-- 服务端模拟：`minihost` 工具（`start` 起最小宿主跑本插件真实服务端代码 / `call` / `stop`）
+也不带 `preview.spec.mjs`——连预览标题都由它按插件目录名自动生成（要求 useful-tools ≥ 0.1.26）：
 
 ```sh
 # 在 DSH 里以 AI 工具调用（不是本仓库的脚本）
-preview({ action: "gen",   plugin: "<本仓库根>" })
+preview({ action: "gen", plugin: "<本仓库根>" })
 minihost({ action: "start", plugin: "<本仓库根>", port: 31199 })
-preview({ action: "serve", file: "<生成的 preview.html>", port: 31188, backend: "http://127.0.0.1:31199" })
+preview({ action: "serve", file: "<生成的 preview.html>", port: 31188 })
 ```
 
+- `preview gen` 的产物默认落在插件目录内时，会提示把 `assets/preview.html` 加进 `.gitignore`；
+  想看真实渲染又不入库，把产物写到临时目录即可。
+- `preview serve` **省略 `backend` 会自动接上最近一次存活的 `minihost` 实例**（返回 `backendSource: "minihost:<port>"`）；
+  要直连真实实例再显式给 `backend`。
+- `minihost start` 默认把子进程的 `DSH_HOME` 指到隔离目录（`<插件根>/.minihost/home-<port>`），
+  不会碰真实会话与附件库。**本插件的服务端需要读真实实例时**必须显式传
+  `env: { DSH_HOME: "<真实 .dsh 路径>" }`，否则读到的是隔离目录（这是有意的安全默认）。
+- 预览页顶部有错误面板：`window.onerror` / `unhandledrejection` / `previewError` 都会渲染成红色块，
+  无头截图也能看到失败原因。
+
 预览页加载的是仓库里真实的 `lib/client.js`（不是另写的 mockup），模块装载 / `locale` /
-`slots` / `fetch` 垫片由 useful-tools 的 harness 提供；数据来源由 `backend` 决定
-（最小宿主或真实实例），改动只留在页面内，不写任何文件到本仓库。
+`slots` / `fetch` 垫片由 useful-tools 的 harness 提供，改动只留在页面内，不写任何文件到本仓库。
+
 ## 设置侧边栏
 
 `lib/client.js` 挂载「设置 → 侧边栏 → 会话迁移」，四个分区：
