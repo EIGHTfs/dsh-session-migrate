@@ -2,8 +2,6 @@
   ".auditignore": "审计豁免清单（lib/client.js 单文件入口架构的固有行数/嵌套不入审）",
   ".gitignore": "忽略规则（tgz 打包产物等不入库）",
   "README.md": "项目 README（功能总览/用法/坑/预览/分体式文档入口）",
-  "assets": "界面预览相关（预览页生成器 + 假数据 + 静态服务器）",
-  "assets/lib": "预览辅助库",
   "cli.mjs": "命令行入口（零依赖可独立运行：list/check/scan/validate/fix/import/repair）",
   "cordis.patch.yml": "DSH 插件组合 patch（loader 注入定义）",
   "docs": "分体式文档（文件树/函数列表/版本记录，README 链接引用）",
@@ -35,5 +33,5 @@
   "docs/FUNCTIONS.md": "函数列表（doc-func 生成：各文件函数名/行号/行数/签名）",
   "docs/TREE.md": "文件目录树（doc-tree 生成：tree-doc.json 注释映射）",
   "tree-doc.json": "文件树注释映射（{路径: 一句话介绍}，手动维护）",
-  "assets/preview.spec.mjs": "预览描述（供 dsh-useful-tools 的 preview 工具消费；本仓库不自持生成器/服务器/假数据）"
+  "test/test-naming.mjs": "文件名版本段自测（expectedLogName 映射 / fixSessionNames 检出与改名幂等）"
 }

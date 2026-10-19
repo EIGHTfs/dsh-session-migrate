@@ -72,7 +72,7 @@ node cli.mjs list     <DSH_HOME>                     # 列会话与布局问题
 node cli.mjs check    <文件> [--home <DSH_HOME>]     # 单文件体检（含目标版本与迁移路径）
 node cli.mjs scan     <文件>                         # 内容缺陷扫描（只读；阻塞>0 退出码 3）
 node cli.mjs validate <文件> [--home <DSH_HOME>]     # 离线跑完整 v0→v1→v2→v3 迁移链（只读）
-node cli.mjs fix      <DSH_HOME>                     # 移出 sessions/ 下非法裸目录
+node cli.mjs fix      <DSH_HOME> [--yes]             # 移出非法裸目录 + 修复文件名版本段（默认预览）
 node cli.mjs import   <源文件|源目录> <DSH_HOME>     # 双路径导入（含 subagents）
 node cli.mjs import   <源> <DSH_HOME> --cwd <cwd>    # 指定目标 cwd
 node cli.mjs repair   <文件> [--home <DSH_HOME>]     # 备份 → 内容修复 → 迁移链校验 → 落盘
@@ -94,6 +94,15 @@ curl -s -X POST localhost:30801/api/session-migrate/convert \
 ```
 
 ## 两个必须避开的坑
+
+**坑 0｜文件名版本段与 header 不符 → 整个实例的会话全不可见**
+
+v4 内容若是叫 `session.jsonl.zstd`（无版本段），目标实例的 workspace 服务会解析失败，
+表现**不是只坏这一条会话，而是前端所有会话都看不到**。正确名字由 `header.version` 决定：
+v0 用 `session.jsonl.zstd`，其余用 `session.v<version>.jsonl.zstd`（含 `subagents/<id>/` 下的文件）。
+
+- 检验：`node cli.mjs check <文件>` 会打出「文件名 ✓/✗（应为 …）」；`list`/`fix` 也会扫
+- 修复：`node cli.mjs fix <DSH_HOME>` 预览 → `--yes` 执行（只改名，不动内容）
 
 **坑 1｜备份放错位置 → 工作区列表全空**
 
@@ -117,7 +126,6 @@ v0 布局是**每行一个独立 zstd frame**，且首帧必须正好是 header 
 ```text
 dsh-session-migrate/
 ├── lib/           插件核心实现（入口/路由/WebSocket/浏览器半侧/引擎）
-├── assets/        预览描述（preview.spec.mjs，供 dsh-useful-tools 的 preview 工具消费）
 ├── docs/          分体式文档（文件树 / 函数列表 / 版本记录，README 链接引用）
 ├── test/          自测脚本（test-client / test-repair）
 ├── cli.mjs        命令行入口（零依赖可独立运行）
@@ -135,7 +143,8 @@ dsh-session-migrate/
 
 ## 界面预览与最小宿主
 
-预览与最小宿主**统一由 `dsh-useful-tools` 插件提供**，本仓库不再自持生成器、静态服务器与假数据：
+预览与最小宿主**统一由 `dsh-useful-tools` 插件提供**，本仓库不自持生成器、静态服务器、假数据，
+也不带 `preview.spec.mjs`——连预览标题都由它按插件目录名自动生成：
 
 - 界面预览：`preview` 工具（`gen` 生成单文件预览页 / `serve` 局域网托管，可反代后端）
 - 服务端模拟：`minihost` 工具（`start` 起最小宿主跑本插件真实服务端代码 / `call` / `stop`）

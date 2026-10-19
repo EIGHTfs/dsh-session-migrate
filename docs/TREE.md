@@ -22,11 +22,10 @@ dsh-session-migrate/
 │   ├── i18n/ — 外置多语言字典
 │   │   ├── en.json — 英文词条
 │   │   ├── zh.json — 中文词条
-├── assets/ — 预览描述（供 dsh-useful-tools 的 preview 工具消费）
-│   ├── preview.spec.mjs — 预览标题声明（垫片与组件挂载由 useful-tools harness 提供）
 ├── test/ — 自测脚本
 │   ├── test-client.mjs — client 契约自测（模块装配 / 槽注册 / 同步文案）
 │   ├── test-repair.mjs — repair 引擎自测（内容缺陷扫描 / 修复 / zstd 往返）
+│   ├── test-naming.mjs — 文件名版本段自测（命名映射 / 检出 / 改名幂等）
 ├── docs/ — 分体式文档（文件树/函数列表/版本记录，README 链接引用）
 │   ├── CHANGELOG.md — 版本记录明细（1.0.0~1.0.4 逐版本 changelog，README 链接引用）
 │   ├── FUNCTIONS.md — 函数列表（doc-func 生成：各文件函数名/行号/行数/签名）

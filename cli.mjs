@@ -25,6 +25,7 @@ import { basename, join, dirname } from 'node:path';
 import { isPlaintext, decodeFull, textToZstd } from './lib/engine/zstd.js';
 import { checkArtifact, printList, fixLayout, renderVersionPlan } from './lib/engine/inspect.js';
 import { importAuto } from './lib/engine/import.js';
+import { fixSessionNames } from './lib/engine/layout.js';
 import { scanLog, repairLogText, parseLog } from './lib/engine/repair.js';
 import { validateMigrationChain } from './lib/engine/validate.js';
 
@@ -176,9 +177,24 @@ function cmdList(rest) {
 
 /** fix：移出 sessions/ 下非法裸目录 */
 function cmdFix(rest) {
-  const home = rest[0] || detectHome();
+  const home = rest.find((x) => !x.startsWith('--')) || detectHome();
   if (!home) { console.error('fix 需要 <DSH_HOME>'); return 2; }
+  const apply = hasFlag(rest, '--yes');
   fixLayout(home);
+
+  // 文件名版本段修复：v4 内容叫 session.jsonl.zstd 会让整个实例的会话在前端不可见
+  const report = fixSessionNames(home, { apply, log: (m) => console.log(m) });
+  console.log('');
+  console.log(`文件名检查: 共 ${report.checked} 个日志文件，命名不一致 ${report.mismatched.length} 个`);
+  for (const m of report.mismatched) {
+    console.log(`  ${apply ? '✓ 已改名' : '· 待改名'} ${m.file}`);
+    console.log(`      → ${m.expected}（header.version=${m.version}）`);
+  }
+  for (const s of report.skipped) console.log(`  ⚠ 跳过 ${s.file}: ${s.reason}`);
+  if (report.mismatched.length > 0 && !apply) {
+    console.log('');
+    console.log('以上为预览。确认后加 --yes 执行改名（只改名，不动内容）。');
+  }
   return 0;
 }
 
