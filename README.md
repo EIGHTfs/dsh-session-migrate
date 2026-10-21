@@ -73,6 +73,7 @@ node cli.mjs check    <文件> [--home <DSH_HOME>]     # 单文件体检（含�
 node cli.mjs scan     <文件>                         # 内容缺陷扫描（只读；阻塞>0 退出码 3）
 node cli.mjs validate <文件> [--home <DSH_HOME>]     # 离线跑完整 v0→v1→v2→v3 迁移链（只读）
 node cli.mjs fix      <DSH_HOME> [--yes]             # 移出非法裸目录 + 修复文件名版本段（默认预览）
+node cli.mjs truncate <文件> --seq <n> [--yes]       # 按事件 seq 截断（吸附闭合边界；默认预览）
 node cli.mjs import   <源文件|源目录> <DSH_HOME>     # 双路径导入（含 subagents）
 node cli.mjs import   <源> <DSH_HOME> --cwd <cwd>    # 指定目标 cwd
 node cli.mjs repair   <文件> [--home <DSH_HOME>]     # 备份 → 内容修复 → 迁移链校验 → 落盘

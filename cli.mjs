@@ -26,6 +26,7 @@ import { isPlaintext, decodeFull, textToZstd } from './lib/engine/zstd.js';
 import { checkArtifact, printList, fixLayout, renderVersionPlan } from './lib/engine/inspect.js';
 import { importAuto } from './lib/engine/import.js';
 import { fixSessionNames } from './lib/engine/layout.js';
+import { truncateSession } from './lib/engine/truncate.js';
 import { scanLog, repairLogText, parseLog } from './lib/engine/repair.js';
 import { validateMigrationChain } from './lib/engine/validate.js';
 
@@ -314,8 +315,29 @@ function cmdImport(rest) {
   }
 }
 
+/** truncate：保留 seq <= --seq 的事件，必要时补 turn/end 收尾（默认预览，--yes 才写） */
+function cmdTruncate(rest) {
+  const file = rest.find((x) => !x.startsWith('--') && !/^\d+$/.test(x));
+  const i = rest.indexOf('--seq');
+  const seq = i >= 0 ? Number(rest[i + 1]) : NaN;
+  if (!file || !Number.isInteger(seq)) { console.error('truncate 需要 <文件> --seq <n>'); return 2; }
+  const apply = hasFlag(rest, '--yes');
+  const pIdx = rest.indexOf('--provider');
+  const mIdx = rest.indexOf('--model');
+  const provider = pIdx >= 0 ? String(rest[pIdx + 1] ?? '') : '';
+  const model = mIdx >= 0 ? String(rest[mIdx + 1] ?? '') : '';
+  const r = truncateSession({ file, keepSeq: seq, apply, provider, model });
+  if (!r.ok) { console.error('✗', r.error); return 1; }
+  console.log(`共 ${r.total} 条事件 → 保留 ${r.kept}（丢弃 ${r.dropped}）｜末 seq ${r.lastSeq}｜补收尾 ${r.synthesized ? '是' : '否'}`);
+  if (r.backup) console.log('备份 →', r.backup);
+  if (apply) console.log('已写回', (r.bytes / 1048576).toFixed(2), 'MB');
+  else console.log('（预览，未写盘；确认后加 --yes）');
+  return 0;
+}
+
 /** 命令 → 处理器 分发表 */
 const HANDLERS = {
+  truncate: cmdTruncate,
   check: cmdCheck,
   scan: cmdScan,
   validate: cmdValidate,

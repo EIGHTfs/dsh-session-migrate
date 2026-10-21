@@ -5,6 +5,7 @@
 
 | 版本 | 内容 |
 |------|------|
+| 1.0.8 | **新增 `truncate` 命令：按事件 seq 截断会话，用于排查「某段内容导致上游拒绝请求」**（`node cli.mjs truncate <文件> --seq <n> [--yes] [--provider p --model m]`）。安全链：整目录备份 → 吸附到「无未闭合 step」的边界（否则补的 turn/end 会被 DSH 判 `turn/end does not match the open turn with no open step`）→ 按需补 turn/end → seq 连续性校验 → 拒绝残留 seq>keepSeq 的事件（否则 DSH 判 `has seq gap`）→ 原子写回；默认预览，`--yes` 才写。可选 `--provider/--model` 把样本里残留的旧 provider（如 wb 无 adapter）改成当前可用值。新增 `test/test-truncate.mjs`（11 项断言：边界吸附 / 补收尾 / seq 连续 / 无超界 / 备份 / 预览不落盘 / 过小 keepSeq 拒绝） |
 | 1.0.7 | 文档同步 useful-tools 0.1.26 的预览/最小宿主行为：`preview.spec.mjs` 可省（标题自动取目录名）；`preview serve` 省略 backend 自动接最近一次 minihost；`minihost start` 默认隔离 `DSH_HOME`（需读真实实例时显式传 `env`）；预览页内错误面板；`gen` 会提示预览产物不要入库 |
 | 1.0.6 | **补附件搬运与校验——只搬会话日志不搬 `media/`，打开会话会报 `Attachment object is missing.`**：导入目录时把 `media/sha256:<摘要>.<ext>` 按内容寻址放进 `<DSH_HOME>/attachments/v1/objects/<前两位>/<摘要>`，落盘前用 sha256 校验（内容与文件名不符则拒绝并列出）；`check` 增加附件存在性检查，打印「引用 N，缺失 M」并列出缺失摘要。自测补 5 项断言（落盘/摘要校验/引用统计/缺失报告） |
 | 1.0.5 | **修「投放 v4 会话时文件名不带版本段，导致目标实例 workspace 服务启动失败、前端所有会话不可见」**：落盘文件名改为按 `header.version` 生成——v0 用 `session.jsonl.zstd`，其余用 `session.v<version>.jsonl.zstd`（含 `subagents/<id>/`）。配套：`check` 增加「文件名版本段 vs header.version」一致性检查（不一致时给出应为的文件名与修法）；`fix <DSH_HOME>` 增加自动改名修复（默认预览，`--yes` 才执行；只改名不动内容，幂等）；新增 `test/test-naming.mjs`（命名映射 / 检出 / 改名 / 幂等 11 项断言）。另：删除自持的预览生成器、静态服务器、假数据与 minihost 脚本，预览与最小宿主统一由 dsh-useful-tools 提供（连预览标题都由其按目录名生成） |
